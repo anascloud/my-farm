@@ -182,7 +182,7 @@
 </head>
 
 <body>
-  <div id="id" class="p"><b>Anas Ahmed</b><span>3D GAME DEVELOPER · ISLAND PORTFOLIO</span></div>
+  <div id="id" class="p"><b>SURVIVAL ISLAND</b><span>by Anas Ahmed</span></div>
   <div id="loc" class="p">Western Beach</div>
   <div id="side" class="p"><canvas id="mini" width="320" height="320"></canvas>
     <div id="list"></div>
@@ -246,7 +246,7 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .55; renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
     const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .3, 2000);
-    camera.position.set(-56, 9, 82);
+    camera.position.set(-50, 26, 104);
     const ctl = new OrbitControls(camera, renderer.domElement);
     Object.assign(ctl, { enableDamping: true, dampingFactor: .06, maxPolarAngle: Math.PI / 2.05, minDistance: 5, maxDistance: 260, enablePan: false });
     ctl.target.set(-62, 2, 64);

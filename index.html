@@ -140,12 +140,12 @@
     Object.assign(ctl, { enableDamping: true, dampingFactor: .06, maxPolarAngle: Math.PI / 2.05, minDistance: 5, maxDistance: 260, enablePan: false });
     ctl.target.set(-62, 2, 64);
     const sky = new Sky(); sky.scale.setScalar(4000); const su = sky.material.uniforms;
-    su.turbidity.value = 3.2; su.rayleigh.value = 1.15; su.mieCoefficient.value = .004; su.mieDirectionalG.value = .84;
+    su.turbidity.value = 2.6; su.rayleigh.value = 2.2; su.mieCoefficient.value = .004; su.mieDirectionalG.value = .84;
     const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(56), THREE.MathUtils.degToRad(150));
     su.sunPosition.value.copy(sunDir); scene.add(sky);
     scene.environment = new THREE.PMREMGenerator(renderer).fromScene(sky).texture;
     scene.environmentIntensity = 0.45;
-    scene.fog = new THREE.FogExp2(0xa8bccc, .0022);
+    scene.fog = new THREE.FogExp2(0x89a7c2, .0026);
     scene.add(new THREE.HemisphereLight(0xcfe3f5, 0x3a4528, 0.32));
     const sun = new THREE.DirectionalLight(0xffe4b8, 3.0); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
     Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 300 }); sun.shadow.bias = -.0003; sun.shadow.normalBias = .4;
@@ -278,30 +278,47 @@
     const heightTex = new THREE.DataTexture(heightData, 256, 256, THREE.RedFormat, THREE.FloatType);
     heightTex.minFilter = heightTex.magFilter = THREE.LinearFilter; heightTex.generateMipmaps = false; heightTex.needsUpdate = true;
     const waterU = { uT: { value: 0 }, uH: { value: heightTex } };
-    const waterMat = new THREE.MeshPhysicalMaterial({
-      color: 0xffffff, roughness: .14, metalness: 0,
-      transparent: true, opacity: .92,
-      normalMap: waterN, normalScale: new THREE.Vector2(.85, .85),
-      envMapIntensity: 1.15
-    });
-    waterMat.customProgramCacheKey = () => 'realwater';
-    waterMat.onBeforeCompile = s => {
-      Object.assign(s.uniforms, waterU);
-      s.vertexShader = 'varying vec3 vWPos;\n' + s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos=(modelMatrix*vec4(position,1.0)).xyz;');
-      s.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D uH;\nuniform float uT;\n' + NOISE_GLSL + s.fragmentShader
-        .replace('#include <color_fragment>', `#include <color_fragment>
+const waterMat = new THREE.MeshPhysicalMaterial({
+  color: 0x0d3b66,          // deep sea blue base (this is what you see)
+  roughness: 0.32,           // a bit rougher so env reflection is softer
+  metalness: 0.0,
+  transparent: true,
+  opacity: 0.96,
+  normalMap: waterN,
+  normalScale: new THREE.Vector2(0.7, 0.7),
+  envMapIntensity: 0.55      // reduce sky reflection so blue survives
+});
+waterMat.customProgramCacheKey = () => 'realwater';
+waterMat.onBeforeCompile = s => {
+  Object.assign(s.uniforms, waterU);
+  s.vertexShader = 'varying vec3 vWPos;\n' + s.vertexShader.replace(
+    '#include <begin_vertex>',
+    '#include <begin_vertex>\nvWPos=(modelMatrix*vec4(position,1.0)).xyz;'
+  );
+  s.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D uH;\nuniform float uT;\n' + NOISE_GLSL +
+    s.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
         vec2 huv = vWPos.xz/${(2 * E).toFixed(1)} + .5;
         float wth  = texture2D(uH, clamp(huv, 0.001, 0.999)).r;
         float wwav = fbm2(vWPos.xz*.5 + vec2(uT*.6, -uT*.4));
         float wdep = max(-wth, 0.0);
-        vec3  wcol = mix(vec3(.03,.42,.62), vec3(.005,.10,.30), smoothstep(.3, 5.0, wdep));
+        // shallow turquoise -> deep navy, applied multiplicatively so material color still matters
+        vec3 shallow = vec3(0.10, 0.62, 0.78);
+        vec3 deep    = vec3(0.02, 0.13, 0.34);
+        vec3 wcol    = mix(shallow, deep, smoothstep(0.2, 4.5, wdep));
+        diffuseColor.rgb = wcol;
         float wfm  = smoothstep(.5, -.1, wth + (wwav-.5)*.5);
         float wfoam = clamp(wfm*(.35+.8*fbm2(vWPos.xz*1.6 + vec2(-uT*.8, uT*.5))), 0.0, 1.0);
-        diffuseColor.rgb = mix(wcol, vec3(.78,.84,.86), wfoam * 0.85);`)
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .6, wfoam);');
-    };
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), waterMat);
-    water.rotation.x = -Math.PI / 2; water.position.y = -.02; scene.add(water);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.85,.90,.92), wfoam * 0.75);`)
+      .replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, .65, wfoam);')
+      .replace('#include <opaque_fragment>', `
+        // tint the reflected sky so the horizon reads blue, not bright white
+        outgoingLight = mix(outgoingLight, outgoingLight * vec3(0.35, 0.55, 0.85), 0.55);
+        #include <opaque_fragment>`);
+};
+const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), waterMat);
+water.rotation.x = -Math.PI / 2; water.position.y = -.02; scene.add(water);
 
     /* ===== VEGETATION ===== */
     function scatter(n, f) { const o = []; let t = 0; while (o.length < n && t++ < n * 60) { const x = (rnd() - .5) * 2 * (E - 6), z = (rnd() - .5) * 2 * (E - 6), h = H(x, z); if (f(x, z, h)) o.push([x, h, z]) } return o }

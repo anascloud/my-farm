@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Alex Rivera · 3D Game Developer — Island World</title>
+  <title>Anas Ahmed · 3D Game Developer — Survival Island</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
@@ -182,7 +182,7 @@
 </head>
 
 <body>
-  <div id="id" class="p"><b>ALEX RIVERA</b><span>3D GAME DEVELOPER · ISLAND PORTFOLIO</span></div>
+  <div id="id" class="p"><b>Anas Ahmed</b><span>3D GAME DEVELOPER · ISLAND PORTFOLIO</span></div>
   <div id="loc" class="p">Western Beach</div>
   <div id="side" class="p"><canvas id="mini" width="320" height="320"></canvas>
     <div id="list"></div>
@@ -539,7 +539,6 @@
       const dir = new THREE.Vector3(-p.x, 0, -p.z).normalize(), to = new THREE.Vector3(p.x, p.y + 2.9, p.z); man.position.set(p.x + dir.x * 3.2, p.y, p.z + dir.z * 3.2); man.rotation.y = Math.atan2(-dir.x, -dir.z); manT = null; mark.visible = false;
       fly = { t: 0, fT: ctl.target.clone(), fC: camera.position.clone(), tT: to, tC: to.clone().addScaledVector(dir, 7).setY(p.y + 3.6) }
     }
-    const list = document.getElementById('list'); PO.forEach(d => { const b = document.createElement('button'); b.innerHTML = d.t + '<i>' + d.n + '</i>'; b.onclick = () => flyPoster(d); list.appendChild(b) });
     const rc = new THREE.Raycaster(), mv = new THREE.Vector2(); let dn = null;
     renderer.domElement.addEventListener('pointerdown', e => dn = [e.clientX, e.clientY]);
     renderer.domElement.addEventListener('pointerup', e => {

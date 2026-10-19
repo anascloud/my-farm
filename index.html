@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>3D Game Developer Portfolio · Island World (FarmVille-style)</title>
+
+  <!-- Playful, rounded fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --ui-bg: rgba(255,255,255,0.06);
+      --ui-accent: linear-gradient(135deg,#ffdb6e,#ff7b88);
+      --card-glow: rgba(255,200,120,0.14);
+      --hud-bg: rgba(10,14,18,0.65);
+      --hud-accent: #ffd966;
+      --round: 18px;
+    }
+
+    html,body{height:100%;margin:0;font-family:"Poppins", "Baloo 2", system-ui, sans-serif;overflow:hidden;background:linear-gradient(180deg,#9ad0ff 0%, #cbeef7 60%, #eaf9ff 100%);}
+
+    /* Top-left identity card */
+    #info{
+      position: absolute; left: 20px; top: 20px; z-index: 20;
+      display:flex; align-items:center; gap:12px;
+      background: var(--ui-bg);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding:12px 18px; border-radius: 999px;
+      box-shadow: 0 8px 28px rgba(23, 45, 80, 0.35), 0 2px 6px rgba(0,0,0,0.2);
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+    }
+    #info h1{
+      margin:0; font-family: "Baloo 2", "Poppins", sans-serif; font-size:1.4rem;
+      font-weight:800; letter-spacing:-0.6px;
+      background: var(--ui-accent);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    #info .badge{
+      font-size:0.8rem; padding:6px 10px; border-radius:999px;
+      background: rgba(255,255,255,0.06); color:var(--hud-accent); font-weight:700;
+      border:1px solid rgba(255,255,255,0.06);
+    }
+
+    /* Controls bottom hint */
+    #controls-hint{
+      position: absolute; left:50%; transform:translateX(-50%); bottom:22px; z-index:20;
+      display:flex; gap:18px; align-items:center;
+      background: rgba(0,0,0,0.45); padding:10px 18px; border-radius:999px;
+      color:#fff; font-weight:600; font-size:0.95rem; pointer-events:none;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+    .key{
+      display:inline-block; padding:4px 10px; border-radius:8px; background:rgba(255,255,255,0.1);
+      border-bottom:2px solid rgba(255,255,255,0.12); font-weight:800;
+    }
+
+    /* Loading overlay */
+    #loading{
+      position: absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(180deg, rgba(10,18,28,0.85), rgba(8,14,20,0.4));
+      color:#fff; z-index:100; font-family:"Baloo 2",sans-serif; font-size:1.2rem;
+      pointer-events:none; border-radius:0;
+    }
+
+    /* HUD (coins / level / energy) - top-right */
+    #hud{
+      position: absolute; top:20px; right:20px; z-index:20;
+      display:flex; gap:12px; align-items:center;
+      background: var(--hud-bg); padding:10px; border-radius:14px;
+      border:1px solid rgba(255,255,255,0.06); box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+      color:#fff; font-weight:600;
+    }
+    .hud-item{ display:flex; gap:8px; align-items:center; padding:6px 10px; border-radius:10px; background:rgba(255,255,255,0.02); }
+    .coin{ background: linear-gradient(180deg,#fff0b8,#ffd966); padding:6px; border-radius:8px; color:#48320b; font-weight:900; }
+    .lvl{ background: linear-gradient(180deg,#9ee6a9,#57c05f); color:#09320a; padding:6px 8px; border-radius:8px; font-weight:800; }
+    .energy{ min-width:120px; display:flex; flex-direction:column; gap:6px; }
+    .energy .bar{ height:8px; background:rgba(255,255,255,0.12); border-radius:8px; overflow:hidden; }
+    .energy .fill{ height:100%; background: linear-gradient(90deg,#ffb347,#ff7b88); width:72%; }
+
+    /* small screens */
+    @media (max-width:600px){
+      #info h1{ font-size:1.1rem; }
+      .hud{ padding:8px; gap:8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h1>ALEX RIVERA</h1>
+    <span class="badge">Game Dev · 3D</span>
+  </div>
+
+  <div id="hud" aria-hidden>
+    <div class="hud-item"><div class="coin">💰</div><div style="min-width:64px">12,560</div></div>
+    <div class="hud-item"><div class="lvl">LV 18</div><div style="min-width:64px">Farmville</div></div>
+    <div class="hud-item energy">
+      <div style="font-size:0.85rem">Energy</div>
+      <div class="bar"><div class="fill"></div></div>
+    </div>
+  </div>
+
+  <div id="controls-hint">
+    <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> move</span>
+    <span><span class="key">🖱️</span> Drag look</span>
+    <span><span class="key">🔍</span> Scroll zoom</span>
+  </div>
+
+  <div id="loading">🏝️ LOADING GAME WORLD...</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- SCENE / RENDERER ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xa8ddff); // softer sky
+    scene.fog = new THREE.Fog(0xa8ddff, 20, 90);
+
+    const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 1000);
+    camera.position.set(12, 11, 20);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 2.5, 0);
+    controls.maxPolarAngle = Math.PI / 2.2;
+    controls.minDistance = 6;
+    controls.maxDistance = 80;
+    controls.enablePan = false;
+
+    // --- LIGHTING (warmer / softer for cartoony look) ---
+    scene.add(new THREE.HemisphereLight(0xfffff6, 0x5576a7, 0.7)); // soft sky/ground fill
+
+    const sunLight = new THREE.DirectionalLight(0xffe6c2, 1.25);
+    sunLight.position.set(18, 25, 12);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    const d = 26;
+    Object.assign(sunLight.shadow.camera, { left:-d, right:d, top:d, bottom:-d, near:1, far:80 });
+    sunLight.shadow.bias = -0.0006;
+    scene.add(sunLight);
+
+    // rim light from behind camera for toon pop
+    const rim = new THREE.DirectionalLight(0xfff7ee, 0.35);
+    rim.position.set(-camera.position.x*0.6, camera.position.y*0.8, -camera.position.z*0.6);
+    scene.add(rim);
+
+    // small warm fill points
+    const fill1 = new THREE.PointLight(0xffe6b2, 0.35, 30); fill1.position.set(-12, 8, 10); scene.add(fill1);
+    const fill2 = new THREE.PointLight(0xaadfff, 0.18, 30); fill2.position.set(10, 6, -12); scene.add(fill2);
+
+    // --- helper factories tuned for toon/cartoon style ---
+    // simple toon material generator (uses MeshToonMaterial for cartoony shading)
+    function Toon(c, opts = {}) {
+      return new THREE.MeshToonMaterial(Object.assign({ color: c, flatShading: true, gradientMap: null, emissive: 0x000000, roughness: 0.8 }, opts));
+    }
+    function Std(c, opts = {}) {
+      return new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.8, flatShading: true }, opts));
+    }
+
+    // --- ISLAND TERRAIN ---
+    const island = new THREE.Mesh(
+      new THREE.CylinderGeometry(14, 14, 0.6, 48),
+      Std(0x67a84c, { roughness: 0.95 })
+    );
+    island.position.y = -0.3; island.receiveShadow = true; scene.add(island);
+
+    const sand = new THREE.Mesh(
+      new THREE.TorusGeometry(14.2, 0.9, 18, 96),
+      Toon(0xefd8a6, { emissive: 0xfff0cc, emissiveIntensity: 0.08 })
+    );
+    sand.rotation.x = Math.PI / 2; sand.position.y = -0.12; sand.receiveShadow = true; scene.add(sand);
+
+    const water = new THREE.Mesh(
+      new THREE.CircleGeometry(28, 80),
+      new THREE.MeshStandardMaterial({ color:0x4aa3df, transparent:true, opacity:0.6, roughness:0.15, metalness:0.25 })
+    );
+    water.rotation.x = -Math.PI/2; water.position.y = -0.45; scene.add(water);
+
+    // --- TREES with toon material ---
+    function createTree(x, z, s = 1, type = Math.random() < 0.5 ? 'round' : 'pine') {
+      const grp = new THREE.Group();
+      const bark = Std(0x7a5639, { roughness: 1, flatShading: true });
+      const shades = [0x2f6b34,0x3f8a3a,0x4d9a42,0x2a5d3a];
+      const shade = shades[Math.floor(Math.random()*shades.length)];
+      const leaf = Toon(shade, { roughness: 0.7 });
+      const part = (geo, mat, px, py, pz) => {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(px * s, py * s, pz * s); m.castShadow = true; m.receiveShadow = true;
+        grp.add(m); return m;
+      };
+      if (type === 'pine') {
+        part(new THREE.CylinderGeometry(0.16*s, 0.24*s, 1.2*s, 6), bark, 0, 0.6, 0);
+        for (let i=0;i<4;i++) part(new THREE.ConeGeometry((1.3 - i*0.28)*s, 1.1*s, 7), leaf, 0, 1.0 + i*0.62, 0);
+      } else {
+        part(new THREE.CylinderGeometry(0.24*s, 0.4*s, 1.6*s, 7), bark, 0, 0.7, 0);
+        [[0,2.1,0,1.1],[0.8,1.8,0.3,0.85],[-0.75,1.85,-0.2,0.9],[0.2,1.8,-0.8,0.8],[-0.2,1.9,0.8,0.8],[0.1,2.8,0.1,0.8]].forEach(([px,py,pz,r])=>{
+          const b = part(new THREE.IcosahedronGeometry(r*s, 1), leaf, px, py, pz);
+          b.scale.y = 0.86; b.rotation.set(Math.random()*3, Math.random()*3, 0);
+        });
+      }
+      grp.position.set(x,0,z); grp.rotation.y = Math.random()*6.28;
+      return grp;
+    }
+
+    [[-11,-9],[12,-8],[-10,10],[11,9],[-13,0],[13,2],[0,-13],[-3,13],[9,-12],[-12,-10],[7,13],[-9,-12]]
+      .forEach(([x,z]) => scene.add(createTree(x,z,0.7 + Math.random()*0.4)));
+
+    // --- POSTER ART (canvas) & stronger emissive poster material + sprite glow ---
+    function makePoster(title, draw){
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 768;
+      const g = c.getContext('2d');
+      // white card base with rounded feel via background gradient
+      const gradBg = g.createLinearGradient(0,0,0,768);
+      gradBg.addColorStop(0, '#fffaf0'); gradBg.addColorStop(1,'#fff1dc');
+      g.fillStyle = gradBg; g.fillRect(0,0,512,768);
+
+      draw(g);
+
+      // bottom band with title
+      g.fillStyle = 'rgba(255,255,255,0.95)'; g.fillRect(0,640,512,128);
+      g.fillStyle = '#28344b'; g.font = '800 44px "Baloo 2", Inter, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+      g.fillText(title, 256, 690);
+      g.font = '600 18px Poppins, sans-serif'; g.fillStyle = '#ff8a3c';
+      g.fillText('PLAY THE GAME', 256, 732);
+
+      // subtle border
+      g.strokeStyle = '#e9d8c4'; g.lineWidth = 8; g.strokeRect(6,6,500,756);
+      const tex = new THREE.CanvasTexture(c); tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    }
+
+    // re-use your art functions but slightly brighter palette
+    const circ = (g,x,y,r,col) => { g.fillStyle = col; g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill(); };
+    const grad = (g,a,b,h=640) => { const k = g.createLinearGradient(0,0,0,h); k.addColorStop(0,a); k.addColorStop(1,b); g.fillStyle=k; g.fillRect(0,0,512,h); };
+
+    const posterArt = {
+      island: g => {
+        grad(g,'#ffdcb0','#89d5f4',380);
+        g.fillStyle = '#1f78b4'; g.fillRect(0,400,512,240);
+        circ(g,380,190,64,'#fff7c8');
+        g.fillStyle = '#efd8a6'; g.beginPath(); g.ellipse(256,480,200,70,0,0,Math.PI*2); g.fill();
+        g.strokeStyle = '#6b4e2e'; g.lineWidth = 12;
+        g.beginPath(); g.moveTo(250,470); g.quadraticCurveTo(280,360,260,270); g.stroke();
+      },
+      farm: g => {
+        grad(g,'#e7f6ff','#dff9ff',330);
+        circ(g,100,100,44,'#ffe066');
+        g.fillStyle = '#78b34a'; g.fillRect(0,340,512,320);
+        g.fillStyle = '#cc6b4a'; g.fillRect(150,210,210,150);
+        g.fillStyle = '#fff'; g.fillRect(226,270,60,90);
+      },
+      jungle: g => {
+        grad(g,'#0f4f28','#2a7a3a');
+        g.fillStyle = '#144d25';
+        [60,180,340,450].forEach(x=>g.fillRect(x,0,36,640));
+        circ(g,256,400,95,'#8B5A2B'); circ(g,256,380,60,'#c8905a');
+      },
+      birds: g=> {
+        grad(g,'#7ec8ff','#e6fbff',520);
+        g.fillStyle = '#6b8f4e'; g.fillRect(0,520,512,120);
+        circ(g,160,420,80,'#ee3333'); circ(g,135,400,16,'#fff');
+      },
+      shooter: g => {
+        grad(g,'#1a1a24','#5a1a1a');
+        g.strokeStyle = '#ff4444'; g.lineWidth = 8;
+        g.beginPath(); g.arc(256,320,130,0,Math.PI*2); g.stroke();
+      },
+      racing: g => {
+        grad(g,'#ff9a5a','#ffd68a',300);
+        g.fillStyle = '#222'; g.beginPath(); g.moveTo(230,300); g.lineTo(282,300); g.lineTo(560,640); g.lineTo(-48,640); g.fill();
+      }
+    };
+
+    const gamePosters = [
+      { color: 0x4aa3df, pos: [-6, 2.0, -3.5], title: 'ISLAND CASTAWAY', art: 'island' },
+      { color: 0x8fbf5a, pos: [0, 2.2, -6],     title: 'FARMVILLE',       art: 'farm' },
+      { color: 0x2e8b3a, pos: [6, 1.9, -3.5],   title: 'JUNGLE RUN',      art: 'jungle' },
+      { color: 0xee3333, pos: [6, 2.0, 3.5],    title: 'ANGRY BIRDS',     art: 'birds' },
+      { color: 0xff4444, pos: [0, 2.0, 6],      title: 'SHOOTER',         art: 'shooter' },
+      { color: 0xff8a3c, pos: [-6, 1.9, 3.5],   title: 'CAR RACING',      art: 'racing' },
+    ];
+
+    const monoliths = [];
+    // glow sprite texture (radial)
+    function makeGlowTexture(){
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      const rg = g.createRadialGradient(64,64,8,64,64,64);
+      rg.addColorStop(0, 'rgba(255,220,120,0.95)'); rg.addColorStop(0.38, 'rgba(255,150,100,0.55)');
+      rg.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle = rg; g.fillRect(0,0,128,128);
+      return new THREE.CanvasTexture(c);
+    }
+    const glowTex = makeGlowTexture();
+
+    gamePosters.forEach(data => {
+      const [x,y,z] = data.pos;
+      const geo = new THREE.BoxGeometry(1.6, 2.4, 0.32);
+      const sideMat = Toon(0x1e2a44, { emissive: 0x051426, emissiveIntensity: 0.02 });
+      const posterTex = makePoster(data.title, posterArt[data.art]);
+      const posterMat = new THREE.MeshToonMaterial({ map: posterTex, emissive: new THREE.Color(data.color), emissiveIntensity: 0.25, flatShading:true });
+      const pillar = new THREE.Mesh(geo, [sideMat, sideMat, sideMat, sideMat, posterMat, sideMat]);
+      pillar.position.set(x,y,z);
+      pillar.lookAt(0, y, 0);
+      pillar.castShadow = pillar.receiveShadow = true;
+      pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: data.color })));
+      scene.add(pillar);
+
+      const disc = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.12,1.12,0.15,18),
+        new THREE.MeshStandardMaterial({ color: data.color, emissive: new THREE.Color(data.color), emissiveIntensity:0.9, transparent:true, opacity:0.5 })
+      );
+      disc.position.set(x, y - 1.5, z);
+      scene.add(disc);
+
+      // small additive sprite glow below disc
+      const sprMat = new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(data.color), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8 });
+      const sprite = new THREE.Sprite(sprMat); sprite.scale.set(3.2,3.2,1); sprite.position.set(x, disc.position.y - 0.02, z);
+      scene.add(sprite);
+
+      const light = new THREE.PointLight(data.color, 0.6, 7);
+      light.position.set(x,y,z); scene.add(light);
+
+      monoliths.push({ mesh: pillar, disc, sprite, baseY: y, baseRot: pillar.rotation.y, phase: Math.random() * 6.28 });
+    });
+
+    // --- props (kept but toon materials) ---
+    const M = c => Toon(c, { flatShading:true });
+    const add = (m, x, y, z) => { m.position.set(x,y,z); m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
+
+    // palms, hay, trees, banana ring, tower, sandbags, tyres...
+    [[-8.5, -5.5], [-4.5, -6]].forEach(([x,z]) => {
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.2,2.6,6), M(0x8a6a4a)), x, 1.3, z);
+      for (let i=0;i<5;i++){
+        const l = new THREE.Mesh(new THREE.ConeGeometry(0.26,1.4,6), Toon(0x2e8b3a));
+        const a = i * 1.256;
+        add(l, x + Math.cos(a) * 0.6, 2.6, z + Math.sin(a) * 0.6);
+        l.rotation.set(Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2);
+      }
+    });
+
+    [[2.5, -7.5], [3.8, -7.2]].forEach(([x,z]) => {
+      const h = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.9,12), Toon(0xd4b84a)), x, 0.5, z); h.rotation.z = Math.PI/2;
+    });
+
+    [[8.5, -5.5], [4.5, -6]].forEach(([x,z]) => scene.add(createTree(x,z,1.3,'round')));
+    add(new THREE.Mesh(new THREE.TorusGeometry(0.3,0.09,6,10,Math.PI), Toon(0xffe135)), 5.2, 0.4, -2);
+
+    [[8.2, 5.2, 0.5], [8.2, 5.2, 1.5], [8.9, 5.2, 0.5]].forEach(([x,z,y]) => {
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), Toon(0xaa8866)), x, y - 0.05, z);
+    });
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.4,12,12), Toon(0x66bb66)), 8.2, 2.4, 5.2);
+
+    for (let i=0;i<4;i++){
+      const bag = add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.9,8), Toon(0x9a8f6a)), 2 + i*0.7, 0.3, 7.5);
+      bag.rotation.z = Math.PI/2;
+    }
+
+    for (let i=0;i<3;i++){
+      const t = add(new THREE.Mesh(new THREE.TorusGeometry(0.4,0.18,8,14), Toon(0x222222)), -8.5, 0.2 + i*0.36, 5.5);
+      t.rotation.x = Math.PI/2;
+    }
+
+    // --- PARTICLES (warmer fireflies with stronger glow) ---
+    const pCount = 350;
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(pCount * 3);
+    for (let i=0;i<pCount;i++){
+      const r = 6 + Math.random()*8;
+      const a = Math.random()*Math.PI*2;
+      pPos[i*3] = Math.cos(a)*r; pPos[i*3+1] = Math.random()*6 + 0.7; pPos[i*3+2] = Math.sin(a)*r;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+    const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color:0xffe6a8, size:0.18, transparent:true, opacity:0.85, blending:THREE.AdditiveBlending }));
+    scene.add(particles);
+
+    // --- ANIMALS: use toon materials for body parts (keeps your geometry & animation) ---
+    const walkers = [];
+    const sph = (r, sx=1, sy=1, sz=1) => { const q = new THREE.SphereGeometry(r, 20, 14); q.scale(sx,sy,sz); return q; };
+
+    function pickTarget(u){ const a = Math.random()*6.28, r = 3.5 + Math.random()*8.5; u.target.set(Math.cos(a)*r,0,Math.sin(a)*r); }
+
+    function spotTexture(){
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff8f0'; g.fillRect(0,0,256,256);
+      g.fillStyle = '#1b1b1b';
+      for (let i=0;i<9;i++){ g.beginPath(); g.ellipse(Math.random()*256, Math.random()*256, 20 + Math.random()*30, 14 + Math.random()*24, Math.random()*3, 0, Math.PI*2); g.fill(); }
+      return new THREE.CanvasTexture(c);
+    }
+
+    const SPECIES = {
+      cow:   { br:.5, bl:.7, legH:.55, legR:.09, fur:0xffffff, tex:true, neck:[.35,.6], head:[.26,.25,.36], pitch:.7, snout:0xf2a7a0, ears:'side', horns:'cow', tail:'hang', tl:.8, tailCol:0x1b1b1b, udder:true, hoof:0x2a2018, speed:.95, stride:4, swing:.45, wag:1.5},
+      horse: { br:.4, bl:.9, legH:.95, legR:.065, fur:0x8b5a2b, tex:false, neck:[.75,.75], head:[.15,.18,.42], pitch:.95, snout:0x5a3a1e, ears:'cone', mane:0x2b1a0e, tail:'hang', tl:1.0, tailCol:0x2b1a0e, hoof:0x2a2018, speed:1.7, stride:3.5, swing:.5, wag:2},
+      goat:  { br:.26, bl:.4, legH:.42, legR:.04, fur:0xe9e2d3, tex:false, neck:[.3,.7], head:[.13,.15,.25], pitch:.5, snout:0xcfc6b4, ears:'side', horns:'goat', beard:true, tail:'short', tl:.22, hoof:0x2a2018, speed:1.1, stride:5.5, swing:.55, wag:8},
+      dog:   { br:.19, bl:.36, legH:.3, legR:.04, fur:0xc8883a, tex:false, neck:[.17,.8], head:[.13,.13,.2], pitch:.45, snout:0xe8c9a0, ears:'flop', earCol:0x6b4423, tail:'up', tl:.35, speed:1.8, stride:6.5, swing:.6, wag:10},
+      cat:   { br:.13, bl:.28, legH:.2, legR:.03, fur:0xe08a3c, tex:false, neck:[.1,.9], head:[.11,.1,.1], pitch:.25, snout:0xf3d2b0, ears:'cone', tail:'up', tl:.4, speed:1.3, stride:7.5, swing:.55, wag:3},
+    };
+
+    function finishAnimal(g, legs, tail, S){
+      g.userData = { legs, tail, speed:S.speed, stride:S.stride, swing:S.swing, bob:.02, wag:S.wag || 1.2, phase:Math.random()*6, pause:0, target:new THREE.Vector3() };
+      pickTarget(g.userData);
+      scene.add(g);
+      walkers.push(g);
+    }
+
+    function createAnimal(kind,x,z,furOverride){
+      const S = SPECIES[kind];
+      const mat = (c,map) => new THREE.MeshToonMaterial({ color:c, map: map||null, flatShading:true });
+      const fur = mat(furOverride ?? S.fur, S.tex ? spotTexture() : null);
+      const snoutM = mat(S.snout), dark = mat(0x151515), earM = mat(S.earCol ?? S.fur), horn = mat(0xe8dcc0);
+      const hoofM = S.hoof ? mat(S.hoof) : fur;
+      const g = new THREE.Group();
+      const addPart = (geo, m, px,py,pz, parent = g) => { const o = new THREE.Mesh(geo,m); o.position.set(px,py,pz); o.castShadow=true; parent.add(o); return o; };
+
+      const bodyY = S.legH + S.br * 0.75;
+      const body = addPart(new THREE.CapsuleGeometry(S.br, S.bl, 8, 18), fur, 0, bodyY, 0);
+      body.rotation.x = Math.PI/2; body.scale.set(0.9,1,1);
+      if (S.udder) addPart(sph(.15,1,.8,1), mat(0xf2a7a0), 0, bodyY - S.br * 0.85, -S.bl * 0.3);
+
+      // neck + head
+      const [nl, na] = S.neck;
+      const nbY = bodyY + S.br*0.45, nbZ = S.bl/2 + S.br*0.45;
+      const neckMesh = addPart(new THREE.CylinderGeometry(S.br*0.38, S.br*0.5, nl, 12), fur, 0, nbY + Math.cos(na)*nl/2, nbZ + Math.sin(na)*nl/2);
+      neckMesh.rotation.x = na;
+      const [hx,hy,hz] = S.head;
+      const hg = new THREE.Group(); hg.position.set(0, nbY + Math.cos(na)*nl, nbZ + Math.sin(na)*nl); hg.rotation.x = S.pitch; g.add(hg);
+      addPart(sph(1, hx, hy, hz), fur, 0, 0, hz * 0.4, hg);
+      addPart(sph(1, hx*0.78, hy*0.66, hz*0.55), snoutM, 0, -hy*0.2, hz*0.85, hg);
+      [-1,1].forEach(s=>{
+        addPart(sph(hx*0.17), dark, s*hx*0.8, hy*0.35, hz*0.3, hg);
+        if (S.ears === 'cone') { const e = addPart(new THREE.ConeGeometry(hx*0.38, hy*1.1, 8), fur, s*hx*0.6, hy*0.95, 0, hg); e.rotation.z = -s*0.2; }
+        else if (S.ears === 'side') { const e = addPart(sph(hx*0.6,1.1,0.3,0.6), fur, s*hx, hy*0.45, -hz*0.05, hg); e.rotation.z = -s*0.5; }
+        else addPart(sph(hx*0.5,0.3,1.3,0.8), earM, s*hx*0.92, 0, hz*0.05, hg).rotation.z = s*0.15;
+        if (S.horns){
+          const goat = S.horns === 'goat';
+          const h = addPart(new THREE.ConeGeometry(hx*0.16, hy * (goat ? 2.0 : 1.0), 8), horn, s*hx*0.45, hy*0.95, -hz*0.12, hg);
+          h.rotation.z = -s*(goat?0.25:0.9);
+          if (goat) h.rotation.x = -0.7;
+        }
+      });
+      if (S.beard) addPart(new THREE.ConeGeometry(hx*0.22, hy*0.9, 8), fur, 0, -hy*0.95, hz*0.8, hg).rotation.x = Math.PI;
+
+      // tail
+      const tail = new THREE.Group(); tail.position.set(0, bodyY + S.br*0.5, -(S.bl/2 + S.br*0.9)); g.add(tail);
+      const tc = S.tailCol ? mat(S.tailCol) : fur;
+      if (S.tail === 'hang') {
+        tail.rotation.x = 0.25; addPart(new THREE.CylinderGeometry(S.br*0.06, S.br*0.08, S.tl, 8), tc, 0, -S.tl/2, 0, tail);
+        addPart(sph(S.br*0.22,0.8,1.8,0.8), tc, 0, -S.tl, 0, tail);
+      } else if (S.tail === 'up') {
+        tail.rotation.x = -0.7; addPart(new THREE.CylinderGeometry(S.br*0.12, S.br*0.2, S.tl, 8), fur, 0, S.tl/2, 0, tail);
+      } else { tail.rotation.x = -0.5; addPart(new THREE.ConeGeometry(S.br*0.2, S.tl, 8), fur, 0, S.tl/2, 0, tail); }
+
+      // legs
+      const pivotY = S.legH + S.br*0.4, legs = [];
+      [[-1,1],[1,-1],[-1,-1],[1,1]].forEach(([sx,sz]) => {
+        const p = new THREE.Group(); p.position.set(sx * S.br * 0.55, pivotY, sz * S.bl * 0.5);
+        addPart(new THREE.CylinderGeometry(S.legR*1.25, S.legR*0.85, pivotY, 10), fur, 0, -pivotY/2, 0, p);
+        addPart(new THREE.CylinderGeometry(S.legR*0.95, S.legR, S.legR*1.2, 10), hoofM, 0, -pivotY + S.legR*0.6, 0, p);
+        p.userData.off = sx * sz > 0 ? 0 : Math.PI;
+        g.add(p); legs.push(p);
+      });
+
+      g.position.set(x,0,z);
+      finishAnimal(g, legs, tail, S);
+    }
+
+    function createHen(x,z,col=0xf2e6c8){
+      const S = { speed:.8, stride:9, swing:.7, wag:6 };
+      const m = c => new THREE.MeshToonMaterial({ color:c, flatShading:true });
+      const fur = m(col), red = m(0xd8231f), orange = m(0xf2a21e), dark = m(0x111111);
+      const g = new THREE.Group();
+      const addPart = (geo, mm, px,py,pz,parent=g) => { const o=new THREE.Mesh(geo,mm); o.position.set(px,py,pz); o.castShadow=true; parent.add(o); return o; };
+
+      addPart(sph(0.22,0.85,0.9,1.15), fur, 0, 0.38, 0).rotation.x = 0.2;
+      addPart(new THREE.CylinderGeometry(0.055,0.085,0.22,10), fur, 0, 0.605, 0.2).rotation.x = 0.35;
+      addPart(sph(0.075), fur, 0, 0.75, 0.26);
+      addPart(new THREE.ConeGeometry(0.03,0.09,8), orange, 0, 0.73, 0.35).rotation.x = Math.PI/2;
+      [-0.03,0,0.03].forEach((dz,i) => addPart(sph(0.025,0.8,1,1), red, 0, 0.83 + (i===1?0.015:0), 0.26 + dz));
+      addPart(sph(0.025,0.8,1.6,0.8), red, 0, 0.67, 0.33);
+      [-1,1].forEach(s => { addPart(sph(0.015), dark, s*0.06, 0.77, 0.29); addPart(sph(0.15,0.25,0.8,1.5), fur, s*0.2,0.4,0).rotation.z = s*0.15; });
+
+      const tail = new THREE.Group(); tail.position.set(0,0.45,-0.26); g.add(tail);
+      [-1,0,1].forEach(i => {
+        const f = addPart(new THREE.ConeGeometry(0.05,0.24,6), i===0 ? m(0x6b3a1a) : fur, i*0.05, 0.1, -0.02, tail);
+        f.rotation.x = -0.8; f.rotation.z = -i * 0.25;
+      });
+
+      const legs = [];
+      [-1,1].forEach((s,i) => {
+        const p = new THREE.Group(); p.position.set(s*0.07,0.22,0.02);
+        addPart(new THREE.CylinderGeometry(0.012,0.016,0.22,6), orange, 0, -0.11, 0, p);
+        addPart(new THREE.BoxGeometry(0.07,0.015,0.09), orange, 0, -0.213, 0.03, p);
+        p.userData.off = i ? Math.PI : 0;
+        g.add(p); legs.push(p);
+      });
+
+      g.position.set(x,0,z);
+      finishAnimal(g, legs, tail, S);
+    }
+
+    // spawn animals
+    createAnimal('cow', -3, 1);
+    createAnimal('cow', 3.5, -1);
+    createAnimal('horse', 0, 8.5);
+    createAnimal('goat', 8, 0);
+    createAnimal('goat', -8, 1);
+    createAnimal('dog', -2, 4, 0xc8883a);
+    createAnimal('dog', 4, 2, 0xefe3cc);
+    createAnimal('cat', 2, -3);
+    createAnimal('cat', -4, -1, 0x777777);
+    createHen(5, -1); createHen(-5, 2, 0xb5651d); createHen(1, 3); createHen(-1, -4, 0xffffff);
+
+    function updateWalkers(dt, t){
+      walkers.forEach((w,i)=>{
+        const u = w.userData;
+        const dx = u.target.x - w.position.x, dz = u.target.z - w.position.z;
+        if (u.pause > 0){ u.pause -= dt; u.legs.forEach(l=> l.rotation.x *= 0.85); }
+        else if (Math.hypot(dx,dz) < 0.3){ u.pause = 1 + Math.random()*2.2; pickTarget(u); }
+        else {
+          let diff = Math.atan2(dx,dz) - w.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          w.rotation.y += diff * Math.min(1, dt * 4);
+          w.position.x += Math.sin(w.rotation.y) * u.speed * dt;
+          w.position.z += Math.cos(w.rotation.y) * u.speed * dt;
+          // simple local avoidance of monoliths
+          gamePosters.forEach(p => {
+            const ox = w.position.x - p.pos[0], oz = w.position.z - p.pos[2];
+            const dd = Math.hypot(ox, oz);
+            if (dd < 1.6){ w.position.x += ox / dd * (1.6 - dd); w.position.z += oz / dd * (1.6 - dd); }
+          });
+          u.phase += dt * u.speed * u.stride;
+          u.legs.forEach(l => l.rotation.x = Math.sin(u.phase + l.userData.off) * u.swing);
+          w.position.y = Math.abs(Math.sin(u.phase)) * u.bob;
+        }
+        u.tail.rotation.y = Math.sin(t * u.wag + i) * 0.35;
+      });
+    }
+
+    // --- WASD movement (unchanged) ---
+    const keys = { w:false,a:false,s:false,d:false };
+    addEventListener('keydown', e => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = true; });
+    addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k in keys) keys[k] = false; });
+
+    const moveSpeed = 8;
+    const forward = new THREE.Vector3(), right = new THREE.Vector3(), moveVec = new THREE.Vector3();
+    function applyWASD(dt){
+      if (!(keys.w||keys.a||keys.s||keys.d)) return;
+      camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
+      right.crossVectors(forward, camera.up).normalize();
+      moveVec.set(0,0,0);
+      if (keys.w) moveVec.add(forward);
+      if (keys.s) moveVec.sub(forward);
+      if (keys.d) moveVec.add(right);
+      if (keys.a) moveVec.sub(right);
+      if (moveVec.lengthSq() > 0){
+        moveVec.normalize().multiplyScalar(moveSpeed * dt);
+        camera.position.add(moveVec); controls.target.add(moveVec);
+      }
+    }
+
+    // --- ANIMATION LOOP ---
+    const clock = new THREE.Clock();
+    function animate(){
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = performance.now() * 0.001;
+      applyWASD(dt);
+      updateWalkers(dt, t);
+
+      monoliths.forEach((item, idx) => {
+        item.mesh.position.y = item.baseY + Math.sin(t * 1.3 + item.phase) * 0.14;
+        item.disc.position.y = item.mesh.position.y - 1.5;
+        if (item.sprite) item.sprite.position.y = item.disc.position.y - 0.02;
+        item.mesh.rotation.y = item.baseRot + Math.sin(t * 0.38 + idx) * 0.09;
+      });
+
+      particles.rotation.y += 0.0009;
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
+    });
+
+    animate();
+
+    // fade out loading
+    setTimeout(() => {
+      const L = document.getElementById('loading');
+      L.style.transition = 'opacity 0.9s';
+      L.style.opacity = '0';
+      setTimeout(()=>L.style.display='none', 900);
+    }, 600);
+  </script>
+</body>
+</html>

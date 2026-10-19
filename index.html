@@ -437,6 +437,7 @@
     let manT = null, phase = 0;
     function setT(x, z) { manT = { x, z }; mark.position.set(x, H(x, z) + .08, z); mark.visible = true; fly = null }
     function stepMan(dt) {
+      if (sailing) return;
       let dir = null, run = keys.shift;
       if (keys.w || keys.a || keys.s || keys.d) { camera.getWorldDirection(fw); fw.y = 0; fw.normalize(); rt.crossVectors(fw, camera.up).normalize(); mvv.set(0, 0, 0); if (keys.w) mvv.add(fw); if (keys.s) mvv.sub(fw); if (keys.d) mvv.add(rt); if (keys.a) mvv.sub(rt); if (mvv.lengthSq()) { dir = mvv.normalize(); manT = null; mark.visible = false } }
       else if (manT) { const dx = manT.x - man.position.x, dz = manT.z - man.position.z, d = Math.hypot(dx, dz); if (d < .35) { manT = null; mark.visible = false } else { dir = mvv.set(dx / d, 0, dz / d); if (d > 35) run = true } }
@@ -474,6 +475,74 @@
       const sail = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.4, 4, 4), new THREE.MeshStandardMaterial({ color: 0xe8e0cd, roughness: .9, side: THREE.DoubleSide })); sail.position.set(-1.6, 4.4, -.5); sail.rotation.set(0, Math.PI / 2, .5);
       [hull, rib, mast, sail].forEach(m => { m.castShadow = m.receiveShadow = true; g.add(m) }); g.position.set(wx, wy - .2, wz); g.rotation.set(.12, .7, .18); scene.add(g);
       for (let i = 0; i < 5; i++)add(new THREE.Mesh(new THREE.BoxGeometry(.9, .9, .9), wood), wx + 5 + i * .8, H(wx + 5 + i * .8, wz - 4) + .45, wz - 4 + (i % 2), i * .5)
+    }
+
+    /* ===== SAILING SHIP ===== */
+    const ship = { group: new THREE.Group(), x: 0, z: 0, h: 0, v: 0, target: null, land: null };
+    let sailing = false, wantBoard = false, dock = [-62, 64];
+    const dp = new THREE.Vector3();
+    {
+      const outline = k => { const s = new THREE.Shape(); s.moveTo(-1.7*k, -4.6*k); s.lineTo(1.7*k, -4.6*k); s.lineTo(2*k, k); s.quadraticCurveTo(1.7*k, 3.6*k, 0, 5.6*k); s.quadraticCurveTo(-1.7*k, 3.6*k, -2*k, k); s.lineTo(-1.7*k, -4.6*k); return s };
+      const hullG = new THREE.ExtrudeGeometry(outline(1), { depth: 1.5, bevelEnabled: false }); hullG.rotateX(Math.PI / 2); hullG.translate(0, 1.1, 0);
+      const deckG = new THREE.ExtrudeGeometry(outline(.88), { depth: .1, bevelEnabled: false }); deckG.rotateX(Math.PI / 2); deckG.translate(0, 1.13, 0);
+      const sailM = new THREE.MeshStandardMaterial({ color: 0xf1e8d2, roughness: .9, side: THREE.DoubleSide });
+      const parts = [
+        new THREE.Mesh(hullG, new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: .85 })),
+        new THREE.Mesh(deckG, new THREE.MeshStandardMaterial({ color: 0xc9a06a, roughness: .9 })),
+      ];
+      const cyl = (r1, r2, h, x, y, z) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 8), wood); m.position.set(x, y, z); return m };
+      parts.push(cyl(.1, .15, 9, 0, 5.5, 1.6), cyl(.09, .13, 7.5, 0, 4.8, -1.6));
+      const sail = (w, h, y, z) => { const g = new THREE.PlaneGeometry(w, h, 6, 6), p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.cos(p.getX(i) / w * Math.PI) * .45); g.computeVertexNormals(); g.rotateY(Math.PI / 2); const m = new THREE.Mesh(g, sailM); m.position.set(0, y, z); return m };
+      parts.push(sail(4, 6.5, 5.4, 1.6), sail(3.4, 5.5, 4.9, -1.6));
+      const bs = new THREE.Mesh(new THREE.CylinderGeometry(.06, .1, 4, 6), wood); bs.rotation.x = Math.PI / 2; bs.position.set(0, 1.5, 6.4); parts.push(bs);
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 2), new THREE.MeshStandardMaterial({ color: 0x9b7a4e, roughness: .9 })); cab.position.set(0, 1.7, -3.2); parts.push(cab);
+      parts.forEach(m => { m.castShadow = m.receiveShadow = true; ship.group.add(m) });
+      ship.group.rotation.order = 'YXZ'; scene.add(ship.group);
+
+      // find the shoreline and put the ship in deep water just off it (change dx,dz to move it elsewhere)
+      const dx = -.6, dz = .8, sx = -62, sz = 64;
+      let d = 0; while (d < 160 && H(sx + dx * d, sz + dz * d) > -.4) d++;
+      dock = [sx + dx * (d - 1), sz + dz * (d - 1)];
+      let d2 = d; while (d2 < 200 && H(sx + dx * d2, sz + dz * d2) > -2.4) d2++;
+      ship.x = sx + dx * (d2 + 5); ship.z = Math.min(sz + dz * (d2 + 5), E - 10); ship.h = Math.atan2(dx, dz);
+    }
+    function board() { sailing = true; wantBoard = false; manT = null; mark.visible = false; ship.target = null; ship.land = null }
+    function disembark(tx, tz) {
+      let best = null, bd = 1e9;
+      for (let r = 4; r <= 26; r += 2) for (let a = 0; a < T; a += T / 24) {
+        const x = ship.x + Math.cos(a) * r, z = ship.z + Math.sin(a) * r;
+        if (H(x, z) > .4) { const k = Math.hypot(x - tx, z - tz) + r * .5; if (k < bd) { bd = k; best = [x, z] } }
+      }
+      if (!best) return false;
+      sailing = false; ship.target = null; ship.land = null; ship.v = 0;
+      man.position.set(best[0], H(best[0], best[1]), best[1]);
+      if (H(tx, tz) > -.3) setT(tx, tz);
+      return true;
+    }
+    function updateShip(dt, t) {
+      const s = ship, g = s.group;
+      if (s.target) {
+        const dx = s.target[0] - s.x, dz = s.target[1] - s.z, d = Math.hypot(dx, dz);
+        let da = Math.atan2(dx, dz) - s.h; da = Math.atan2(Math.sin(da), Math.cos(da));
+        s.h += THREE.MathUtils.clamp(da, -.8 * dt, .8 * dt);
+        const want = d > 3 ? 11 * Math.max(.15, Math.cos(da)) : 0;
+        s.v += (want - s.v) * Math.min(1, dt * 1.5);
+        if (d <= 3 && !s.land) s.target = null;
+      } else s.v *= Math.max(0, 1 - dt * 1.2);
+      if (Math.abs(s.v) > .01) {
+        const fx = Math.sin(s.h), fz = Math.cos(s.h), nx = s.x + fx * s.v * dt, nz = s.z + fz * s.v * dt;
+        if (H(nx + fx * 6, nz + fz * 6) > -1.4 || H(nx, nz) > -1.4 || Math.abs(nx) > E - 6 || Math.abs(nz) > E - 6) {
+          s.v = 0;
+          if (s.land && sailing) { const l = s.land; s.land = null; s.target = null; disembark(l[0], l[1]) }
+        } else { s.x = nx; s.z = nz }
+      }
+      g.position.set(s.x, -.02 + Math.sin(t * 1.7) * .07, s.z);
+      g.rotation.set(Math.sin(t * 1.2) * .02, s.h, Math.sin(t * 1.5) * .035);
+      if (!sailing && wantBoard && man.position.distanceTo(g.position) < 16) board();
+      if (sailing) {
+        g.updateMatrixWorld(); man.position.copy(g.localToWorld(dp.set(0, 1.1, -1))); man.rotation.y = s.h;
+        [legL, legR, armL, armR].forEach(l => l.rotation.x = 0);
+      }
     }
 
     /* ===== PILLAR POSTERS ===== */
@@ -519,7 +588,10 @@
         if (big) { g.font = '600 ' + S / 58 + 'px Poppins'; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.8)'; g.lineWidth = 4; g.strokeText(d.t, x, y + r * 2.4); g.fillText(d.t, x, y + r * 2.4) }
       });
       const px = w2m(ctl.target.x, S), py = w2m(ctl.target.z, S); g.fillStyle = '#fff'; g.strokeStyle = '#d62b1b'; g.lineWidth = big ? 4 : 3; g.beginPath(); g.arc(px, py, big ? S / 90 : S / 60, 0, T); g.fill(); g.stroke();
-      const a = Math.atan2(camera.position.x - ctl.target.x, camera.position.z - ctl.target.z); g.beginPath(); g.moveTo(px, py); g.lineTo(px - Math.sin(a) * S / 22, py - Math.cos(a) * S / 22); g.stroke()
+      const a = Math.atan2(camera.position.x - ctl.target.x, camera.position.z - ctl.target.z); g.beginPath(); g.moveTo(px, py); g.lineTo(px - Math.sin(a) * S / 22, py - Math.cos(a) * S / 22); g.stroke();
+      // Ship on map
+      g.fillStyle = '#fff'; g.strokeStyle = '#1b5f7a'; g.lineWidth = 2;
+      g.fillRect(w2m(ship.x, S) - 5, w2m(ship.z, S) - 5, 10, 10); g.strokeRect(w2m(ship.x, S) - 5, w2m(ship.z, S) - 5, 10, 10);
     }
     const mini = document.getElementById('mini'), mc = document.getElementById('mc'), mapEl = document.getElementById('map');
     const clickMap = (cv, e, cb) => { const r = cv.getBoundingClientRect(), wx = ((e.clientX - r.left) / r.width * 2 - 1) * E, wz = ((e.clientY - r.top) / r.height * 2 - 1) * E; cb(wx, wz) };
@@ -532,21 +604,34 @@
     /* ===== NAVIGATION ===== */
     let fly = null;
     function flyTo(x, z, dist = 60) {
+      sailing = false;
       x = THREE.MathUtils.clamp(x, -E + 8, E - 8); z = THREE.MathUtils.clamp(z, -E + 8, E - 8); if (H(x, z) < -.3) return; man.position.set(x, H(x, z), z); manT = null; mark.visible = false; const y = Math.max(H(x, z), 0) + 1.5; const to = new THREE.Vector3(x, y, z), dir = new THREE.Vector3(camera.position.x - ctl.target.x, 0, camera.position.z - ctl.target.z).normalize();
       fly = { t: 0, fT: ctl.target.clone(), fC: camera.position.clone(), tT: to, tC: to.clone().addScaledVector(dir, dist).setY(y + dist * .55) }
     }
     function flyPoster(p) {
+      sailing = false;
       const dir = new THREE.Vector3(-p.x, 0, -p.z).normalize(), to = new THREE.Vector3(p.x, p.y + 2.9, p.z); man.position.set(p.x + dir.x * 3.2, p.y, p.z + dir.z * 3.2); man.rotation.y = Math.atan2(-dir.x, -dir.z); manT = null; mark.visible = false;
       fly = { t: 0, fT: ctl.target.clone(), fC: camera.position.clone(), tT: to, tC: to.clone().addScaledVector(dir, 7).setY(p.y + 3.6) }
     }
     const rc = new THREE.Raycaster(), mv = new THREE.Vector2(); let dn = null;
     renderer.domElement.addEventListener('pointerdown', e => dn = [e.clientX, e.clientY]);
     renderer.domElement.addEventListener('pointerup', e => {
-      if (!dn || Math.hypot(e.clientX - dn[0], e.clientY - dn[1]) > 5) return; mv.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); rc.setFromCamera(mv, camera);
+      if (!dn || Math.hypot(e.clientX - dn[0], e.clientY - dn[1]) > 5) return;
+      mv.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); rc.setFromCamera(mv, camera);
+
+      if (sailing) {                                   // steer the ship
+        const g = rc.intersectObject(terrain)[0], w = rc.intersectObject(water)[0];
+        if (g && g.point.y > -.3) { ship.target = [g.point.x, g.point.z]; ship.land = [g.point.x, g.point.z] }
+        else if (w) { ship.target = [w.point.x, w.point.z]; ship.land = null }
+        return;
+      }
+      if (rc.intersectObject(ship.group, true)[0]) { wantBoard = true; setT(dock[0], dock[1]); return }  // click ship → walk to dock and board
+      wantBoard = false;
+
       const h = rc.intersectObjects(PO.map(p => p.pl))[0]; if (h) { const p = PO.find(q => q.pl === h.object), dr = new THREE.Vector3(-p.x, 0, -p.z).normalize(); setT(p.x + dr.x * 3.5, p.z + dr.z * 3.5); return }
       const g = rc.intersectObject(terrain)[0]; if (g && g.point.y > -.3) setT(g.point.x, g.point.z)
     });
-    const keys = {}; addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys.shift = e.shiftKey; if ('wasd'.includes(k) && k.length == 1) keys[k] = 1; if (k === 'm') toggleMap(); if (k === 'escape') toggleMap(false) });
+    const keys = {}; addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys.shift = e.shiftKey; if ('wasd'.includes(k) && k.length == 1) keys[k] = 1; if (k === 'm') toggleMap(); if (k === 'escape') toggleMap(false); if (k === 'e' && sailing) disembark(ship.x, ship.z); });
     addEventListener('keyup', e => { keys[e.key.toLowerCase()] = 0; keys.shift = e.shiftKey });
     const fw = new THREE.Vector3(), rt = new THREE.Vector3(), mvv = new THREE.Vector3();
     addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight) });
@@ -557,11 +642,7 @@
     function loop() {
       requestAnimationFrame(loop); const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
       if (fly) { fly.t = Math.min(1, fly.t + dt / 1.8); const k = fly.t * fly.t * (3 - 2 * fly.t); ctl.target.lerpVectors(fly.fT, fly.tT, k); camera.position.lerpVectors(fly.fC, fly.tC, k); if (fly.t >= 1) fly = null }
-      else if (false) {
-        camera.getWorldDirection(fw); fw.y = 0; fw.normalize(); rt.crossVectors(fw, camera.up).normalize(); mvv.set(0, 0, 0);
-        if (keys.w) mvv.add(fw); if (keys.s) mvv.sub(fw); if (keys.d) mvv.add(rt); if (keys.a) mvv.sub(rt);
-        if (mvv.lengthSq()) { mvv.normalize().multiplyScalar(26 * dt); const nx = THREE.MathUtils.clamp(ctl.target.x + mvv.x, -E + 6, E - 6), nz = THREE.MathUtils.clamp(ctl.target.z + mvv.z, -E + 6, E - 6); mvv.set(nx - ctl.target.x, 0, nz - ctl.target.z); camera.position.add(mvv); ctl.target.add(mvv) }
-      }
+      updateShip(dt, t);
       stepMan(dt); if (!fly) { const k = Math.min(1, dt * 6), ax = (man.position.x - ctl.target.x) * k, ay = (man.position.y + 1.5 - ctl.target.y) * k, az = (man.position.z - ctl.target.z) * k; camera.position.x += ax; camera.position.y += ay; camera.position.z += az; ctl.target.x += ax; ctl.target.y += ay; ctl.target.z += az }
       if (camera.position.y < H(camera.position.x, camera.position.z) + 2) camera.position.y = H(camera.position.x, camera.position.z) + 2;
       sun.target.position.set(Math.round(ctl.target.x / 4) * 4, 0, Math.round(ctl.target.z / 4) * 4); sun.position.copy(sun.target.position).addScaledVector(sunDir, 120);
